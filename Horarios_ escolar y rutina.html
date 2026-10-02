@@ -1,0 +1,2516 @@
+<!DOCTYPE html>
+<!--
+  HORARIO SEMANAL
+  ------------------------------------------------------------
+  Estructura del documento
+    <head>   Metadatos, fuentes, restauración del tema y estilos (CSS en 13 bloques numerados)
+    <body>
+      1. <main>          Cabecera, panel de hora actual, tabla del horario, leyenda
+      2. Menú lateral    Botón hamburguesa + panel con Estadísticas, Agenda y Calendario
+      3. Scripts (x3)     Horario escolar (1), menú/agenda/calendario (2), vistas y rutina (3)
+  Persistencia: localStorage ("tema", "agenda", "examenes")
+-->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="description" content="Horario semanal con hora actual, estadísticas, agenda y calendario de exámenes">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Restaura el tema (claro/oscuro) guardado antes de pintar, para evitar parpadeos -->
+<script>
+  try {
+    var _t = localStorage.getItem("tema");
+    if (_t) document.documentElement.dataset.theme = _t;
+  } catch (e) { /* almacenamiento no disponible: se usa el tema del sistema */ }
+</script>
+<title>Horarios: escolar y rutina</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ==========================================================================
+     1. TOKENS DE DISEÑO (variables CSS, modo claro y oscuro)
+     ========================================================================== */
+  :root {
+    /* Superficies y texto */
+    --bg: #f4f6f9;
+    --surface: #fff;
+    --ink: #1d2733;
+    --muted: #66758a;
+    --line: #e3e8ef;
+    --break: #f0f3f7;
+    /* Estados: hoy, ahora y texto sobre acento */
+    --today: #475569;
+    --now: #0b6bf0;
+    --on-ac: #fff;
+    /* Colores de profesor (marcos) */
+    --t1: #2f9463;
+    --t2: #7457e0;
+    --t3: #d9922b;
+    --t4: #d6467a;
+    /* Colores de módulo (relleno y texto) */
+    --mm: #d3ecdc;
+    --mm-t: #1f5a3a;
+    --pj: #e3f0c6;
+    --pj-t: #435a17;
+    --so: #dcd8f7;
+    --so-t: #3d3388;
+    --ipe: #ecdcf5;
+    --ipe-t: #5a2f86;
+    --sos: #d5e3f8;
+    --sos-t: #24467c;
+    --sr: #fbe6b8;
+    --sr-t: #6b4600;
+    --aw: #f9d8e2;
+    --aw-t: #7b2445;
+    --di: #f4d5ea;
+    --di-t: #742a62;
+    --pr: #fbdcd0;
+    --pr-t: #7a3418;
+  }
+
+  /* Modo oscuro automático (preferencia del sistema) salvo que se fuerce el claro */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f141a;
+      --surface: #171e26;
+      --ink: #e9eef4;
+      --muted: #93a1b1;
+      --line: #27313c;
+      --break: #111820;
+      --today: #a9b8ca;
+      --now: #5ea2ff;
+      --on-ac: #10151b;
+      --t1: #4cc790;
+      --t2: #a18cff;
+      --t3: #f5b74f;
+      --t4: #ff7fa8;
+      --mm: #23422f;
+      --mm-t: #c9ecd6;
+      --pj: #38441f;
+      --pj-t: #e0efc0;
+      --so: #2f2c5a;
+      --so-t: #d8d4fb;
+      --ipe: #442d5c;
+      --ipe-t: #ecd8fa;
+      --sos: #24395c;
+      --sos-t: #d0e2fb;
+      --sr: #5a4419;
+      --sr-t: #fbe6b8;
+      --aw: #59293c;
+      --aw-t: #f9d8e2;
+      --di: #56294d;
+      --di-t: #f4d5ea;
+      --pr: #5a3324;
+      --pr-t: #fbdcd0;
+    }
+  }
+
+  /* Modo oscuro forzado con el botón de tema */
+  :root[data-theme="dark"] {
+    --bg: #0f141a;
+    --surface: #171e26;
+    --ink: #e9eef4;
+    --muted: #93a1b1;
+    --line: #27313c;
+    --break: #111820;
+    --today: #a9b8ca;
+    --now: #5ea2ff;
+    --on-ac: #10151b;
+    --t1: #4cc790;
+    --t2: #a18cff;
+    --t3: #f5b74f;
+    --t4: #ff7fa8;
+    --mm: #23422f;
+    --mm-t: #c9ecd6;
+    --pj: #38441f;
+    --pj-t: #e0efc0;
+    --so: #2f2c5a;
+    --so-t: #d8d4fb;
+    --ipe: #442d5c;
+    --ipe-t: #ecd8fa;
+    --sos: #24395c;
+    --sos-t: #d0e2fb;
+    --sr: #5a4419;
+    --sr-t: #fbe6b8;
+    --aw: #59293c;
+    --aw-t: #f9d8e2;
+    --di: #56294d;
+    --di-t: #f4d5ea;
+    --pr: #5a3324;
+    --pr-t: #fbdcd0;
+  }
+
+  /* ==========================================================================
+     2. BASE: DOCUMENTO Y CABECERA
+     ========================================================================== */
+  /* -- Documento -- */
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  html {
+    scroll-padding-top: env(safe-area-inset-top, 0px);
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Plus Jakarta Sans","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+    line-height: 1.5;
+  }
+  main {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 44px 20px 60px;
+    padding-top: 72px;
+  }
+
+  /* -- Cabecera y tipografía -- */
+  header {
+    margin-bottom: 26px;
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(1.7rem, 3vw, 2.2rem);
+    font-weight: 700;
+    letter-spacing: -.02em;
+  }
+  header p {
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: .95rem;
+  }
+  h2 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 40px 0 14px;
+    letter-spacing: -.01em;
+  }
+  header.top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .acciones {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  /* ==========================================================================
+     3. UTILIDADES DE COLOR (módulos y profesores)
+     ========================================================================== */
+  /* -- Color de profesor (define --tc) -- */
+  .t1 {
+    --tc: var(--t1);
+  }
+  .t2 {
+    --tc: var(--t2);
+  }
+  .t3 {
+    --tc: var(--t3);
+  }
+  .t4 {
+    --tc: var(--t4);
+  }
+
+  /* -- Color de módulo -- */
+  .mm {
+    background: var(--mm);
+    color: var(--mm-t);
+  }
+  .pj {
+    background: var(--pj);
+    color: var(--pj-t);
+  }
+  .so {
+    background: var(--so);
+    color: var(--so-t);
+  }
+  .ipe {
+    background: var(--ipe);
+    color: var(--ipe-t);
+  }
+  .sos {
+    background: var(--sos);
+    color: var(--sos-t);
+  }
+  .sr {
+    background: var(--sr);
+    color: var(--sr-t);
+  }
+  .aw {
+    background: var(--aw);
+    color: var(--aw-t);
+  }
+  .di {
+    background: var(--di);
+    color: var(--di-t);
+  }
+  .pr {
+    background: var(--pr);
+    color: var(--pr-t);
+  }
+
+  /* ==========================================================================
+     4. BOTONES DE CABECERA
+     ========================================================================== */
+  /* -- Botones de cabecera y menú hamburguesa -- */
+  .tema {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: .85rem;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 99px;
+    cursor: pointer;
+  }
+  .tema:hover {
+    border-color: var(--muted);
+  }
+  .tema:focus-visible {
+    outline: 3px solid var(--ink);
+    outline-offset: 2px;
+  }
+  .hamb {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    left: 12px;
+    z-index: 30;
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    box-shadow: 0 4px 16px rgba(20, 30, 50, .12);
+  }
+  .hamb span {
+    display: block;
+    width: 20px;
+    height: 2px;
+    border-radius: 2px;
+    background: currentColor;
+  }
+  .hamb:hover {
+    background: var(--break);
+  }
+  .hamb:focus-visible {
+    outline: 3px solid var(--ink);
+    outline-offset: 2px;
+  }
+
+  /* ==========================================================================
+     5. PANEL DE HORA ACTUAL
+     ========================================================================== */
+  /* -- Panel de hora actual -- */
+  .panel {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 18px 36px;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 22px 28px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 2px rgba(20, 30, 50, .04), 0 8px 24px rgba(20, 30, 50, .05);
+  }
+  .reloj time {
+    display: block;
+    font-size: 2.5rem;
+    font-weight: 700;
+    letter-spacing: -.03em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+  .reloj span {
+    display: block;
+    color: var(--muted);
+    font-size: .88rem;
+    margin-top: 4px;
+    text-transform: capitalize;
+  }
+  .estado .pill {
+    display: inline-block;
+    font-size: .76rem;
+    font-weight: 600;
+    padding: 3px 12px;
+    border-radius: 99px;
+    background: var(--break);
+    color: var(--muted);
+  }
+  .estado .pill.on {
+    background: var(--now);
+    color: #fff;
+  }
+  .estado strong {
+    display: block;
+    font-size: 1.2rem;
+    margin-top: 8px;
+    letter-spacing: -.01em;
+  }
+  .estado p {
+    margin: 2px 0 0;
+    color: var(--muted);
+    font-size: .9rem;
+  }
+  .barra {
+    height: 6px;
+    border-radius: 99px;
+    background: var(--break);
+    margin-top: 12px;
+    overflow: hidden;
+  }
+  .barra span {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--now);
+    border-radius: 99px;
+    transition: width .4s;
+  }
+
+  /* ==========================================================================
+     6. HORARIO (TABLA)
+     ========================================================================== */
+  /* -- Contenedor y estructura -- */
+  .wrap {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 8px 10px;
+    overflow-x: auto;
+    box-shadow: 0 1px 2px rgba(20, 30, 50, .04), 0 8px 24px rgba(20, 30, 50, .05);
+  }
+  table {
+    width: 100%;
+    min-width: 800px;
+    border-collapse: separate;
+    border-spacing: 6px;
+    table-layout: fixed;
+  }
+  th,
+  td {
+    border: 0;
+    padding: 0;
+  }
+
+  /* -- Cabecera de columnas (días) -- */
+  thead th {
+    padding: 10px 6px;
+    font-size: .88rem;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  thead th.hora {
+    width: 104px;
+  }
+  thead th.hoy {
+    background: var(--today);
+    color: var(--surface);
+    border-radius: 10px;
+  }
+
+  /* -- Columna de horas -- */
+  th.h {
+    color: var(--muted);
+    font-weight: 500;
+    font-size: .78rem;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.35;
+  }
+  th.h b {
+    display: block;
+    color: var(--ink);
+    font-weight: 600;
+    font-size: .86rem;
+  }
+
+  /* -- Celdas de módulo -- */
+  td.c {
+    position: relative;
+    height: 84px;
+    padding: 15px 16px;
+    border-radius: 12px;
+    text-align: center;
+    vertical-align: middle;
+    font-weight: 600;
+    font-size: .9rem;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+    transition: opacity .2s, transform .2s, box-shadow .2s;
+  }
+  td.c::before {
+    content: "";
+    position: absolute;
+    inset: 5px;
+    border: 2px solid var(--tc);
+    border-radius: 8px;
+    pointer-events: none;
+    opacity: .85;
+    transition: border-width .15s;
+  }
+  td.c small {
+    display: block;
+    margin-top: 4px;
+    font-size: .72rem;
+    font-weight: 400;
+    opacity: .62;
+  }
+  td.c span {
+    display: block;
+  }
+  td.c.hoy {
+    outline: 2px solid color-mix(in srgb, var(--today) 40%, transparent);
+    outline-offset: 2px;
+  }
+  td.c.ahora {
+    outline: 3px solid var(--now);
+    outline-offset: 2px;
+    z-index: 1;
+    box-shadow: 0 8px 22px color-mix(in srgb, var(--now) 35%, transparent);
+  }
+  td.c.ahora::after {
+    content: "Ahora";
+    position: absolute;
+    top: -10px;
+    right: 12px;
+    background: var(--now);
+    color: #fff;
+    font-size: .68rem;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 99px;
+  }
+  td.c:focus-visible {
+    outline: 3px solid var(--ink);
+    outline-offset: 2px;
+  }
+
+  /* -- Recreos y franja actual -- */
+  tr.rec>td {
+    padding: 6px;
+    border-radius: 99px;
+    background: var(--break);
+    color: var(--muted);
+    font-size: .76rem;
+    font-weight: 500;
+    letter-spacing: .06em;
+    text-align: center;
+  }
+  tr.rec>th.h {
+    background: none;
+  }
+  tr.now-row>th.h,
+  tr.now-row>th.h b {
+    color: var(--now);
+  }
+  tr.rec.now-row>td {
+    color: var(--now);
+    font-weight: 700;
+    background: color-mix(in srgb, var(--now) 12%, var(--surface));
+  }
+
+  /* -- Selección interactiva de módulos -- */
+  table.sel td.c {
+    opacity: .3;
+  }
+  table.sel td.c.sel-mod,
+  table.sel td.c.sel-prof {
+    opacity: 1;
+  }
+  table.sel td.c.sel-mod {
+    transform: scale(1.03);
+    z-index: 2;
+    box-shadow: 0 10px 24px rgba(20, 30, 50, .22);
+  }
+  table.sel td.c.sel-mod::before,
+  table.sel td.c.sel-prof::before {
+    border-width: 4px;
+    opacity: 1;
+  }
+  .selinfo {
+    margin: 14px 2px 0;
+    font-size: .86rem;
+    color: var(--muted);
+    min-height: 1.5em;
+  }
+  .selinfo b {
+    color: var(--ink);
+  }
+
+  /* ==========================================================================
+     7. LEYENDA
+     ========================================================================== */
+  /* -- Leyenda -- */
+  .llave {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 22px;
+    margin-top: 22px;
+    font-size: .85rem;
+    color: var(--muted);
+  }
+  .llave span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .llave i {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+  }
+  .llave i.fr {
+    width: 16px;
+    height: 16px;
+    border: 3px solid var(--tc);
+    border-radius: 5px;
+  }
+  .llave .sep {
+    width: 1px;
+    background: var(--line);
+    align-self: stretch;
+  }
+  .llave i.dot-hoy {
+    background: var(--today);
+  }
+  .llave i.dot-ahora {
+    background: var(--now);
+  }
+
+  /* ==========================================================================
+     8. ESTADÍSTICAS DE HORAS
+     ========================================================================== */
+  /* -- Cifras resumen -- */
+  .cifras {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .cifras div {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px 18px;
+  }
+  .cifras b {
+    display: block;
+    font-size: 1.65rem;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+  .cifras span {
+    color: var(--muted);
+    font-size: .82rem;
+  }
+
+  /* -- Desplegables y listas de horas -- */
+  .mods {
+    list-style: none;
+    margin: 0;
+    padding: 6px 20px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+  }
+  .mods li {
+    display: grid;
+    grid-template-columns: minmax(170px, 270px) 1fr 100px;
+    gap: 16px;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: .92rem;
+  }
+  .mods li:last-child {
+    border-bottom: 0;
+  }
+  .mods .nm {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 600;
+  }
+  .mods .nm>span {
+    display: block;
+    line-height: 1.3;
+  }
+  .mods .nm small {
+    display: block;
+    font-weight: 400;
+    color: var(--muted);
+    font-size: .78rem;
+  }
+  .mods .nm i {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    margin-left: 4px;
+  }
+  .mods .nm i:not(.fr) {
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--tc);
+  }
+  .mods .nm i.fr {
+    background: none;
+    border: 3px solid var(--tc);
+    margin-left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+  }
+  .mods .tr {
+    height: 10px;
+    border-radius: 99px;
+    background: var(--break);
+    overflow: hidden;
+  }
+  .mods .tr b {
+    display: block;
+    height: 100%;
+    border-radius: 99px;
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, currentColor 35%, transparent);
+  }
+  .mods .tr b.tb {
+    background: var(--tc);
+    box-shadow: none;
+  }
+  .mods .hh {
+    text-align: right;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .mods .hh small {
+    display: block;
+    font-weight: 400;
+    color: var(--muted);
+    font-size: .76rem;
+  }
+  .acc {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    margin-top: 12px;
+    overflow: hidden;
+  }
+  .acc summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 20px;
+    font-weight: 700;
+    cursor: pointer;
+    list-style: none;
+  }
+  .acc summary::-webkit-details-marker {
+    display: none;
+  }
+  .acc summary::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid var(--muted);
+    border-bottom: 2px solid var(--muted);
+    transform: rotate(-45deg);
+    transition: transform .2s;
+    margin-right: 4px;
+  }
+  .acc[open] summary::before {
+    transform: rotate(45deg);
+  }
+  .acc summary em {
+    margin-left: auto;
+    font-style: normal;
+    font-weight: 500;
+    font-size: .82rem;
+    color: var(--muted);
+  }
+  .acc summary:hover {
+    background: var(--break);
+  }
+  .acc summary:focus-visible {
+    outline: 3px solid var(--ink);
+    outline-offset: -3px;
+  }
+  .acc .mods {
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+  }
+
+  /* ==========================================================================
+     9. MENÚ LATERAL (estadísticas · agenda · calendario)
+     ========================================================================== */
+  /* -- Panel deslizante -- */
+  .cajon button:focus-visible {
+    outline: 3px solid var(--ink);
+    outline-offset: 2px;
+  }
+  .velo {
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    background: rgba(10, 15, 25, .45);
+  }
+  .velo[hidden] {
+    display: none;
+  }
+  .cajon {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    width: min(420px, 92vw);
+    z-index: 40;
+    background: var(--surface);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-shadow: 0 0 60px rgba(10, 20, 30, .3);
+    visibility: hidden;
+    transition: transform .28s ease, visibility 0s .28s;
+    overflow: hidden;
+  }
+  .cajon.izq {
+    left: 0;
+    transform: translateX(-105%);
+  }
+  .cajon.der {
+    right: 0;
+    transform: translateX(105%);
+  }
+  .cajon.abierto {
+    transform: none;
+    visibility: visible;
+    transition: transform .28s ease, visibility 0s;
+  }
+  .cj-cab {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--line);
+  }
+  .cj-cab h2 {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+  .cj-cuerpo {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 20px 28px;
+  }
+  .cj-cuerpo h3 {
+    margin: 22px 0 10px;
+    font-size: .95rem;
+  }
+  .cerrar {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    border-radius: 10px;
+    cursor: pointer;
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+    font-size: 1.3rem;
+    font-weight: 600;
+    line-height: 1;
+  }
+  .cerrar:hover {
+    background: var(--break);
+  }
+  .cajon input,
+  .cajon select,
+  .cajon textarea {
+    font: inherit;
+    font-size: .88rem;
+    color: var(--ink);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 8px 10px;
+    min-width: 0;
+  }
+  .cajon input:focus,
+  .cajon select:focus,
+  .cajon textarea:focus {
+    outline: 2px solid var(--ac);
+    outline-offset: 0;
+  }
+  .cajon textarea {
+    width: 100%;
+    min-height: 170px;
+    resize: vertical;
+    line-height: 1.5;
+  }
+  .cajon.izq {
+    --ac: var(--t2);
+    border-radius: 0 24px 24px 0;
+  }
+  .cajon.der {
+    --ac: var(--t1);
+    border-radius: 24px 0 0 24px;
+  }
+  .cj-cab {
+    padding: 22px 22px 18px;
+    border-bottom: 0;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--ac) 20%, var(--surface)), var(--surface) 75%);
+  }
+  .cj-cab h2 {
+    font-size: 1.2rem;
+    letter-spacing: -.01em;
+  }
+  .cj-cab .sub {
+    margin: 2px 0 0;
+    font-size: .82rem;
+    color: var(--muted);
+  }
+  .cerrar {
+    border-radius: 50%;
+    width: 38px;
+    height: 38px;
+    background: color-mix(in srgb, var(--surface) 70%, transparent);
+  }
+  .cj-cuerpo {
+    padding: 6px 22px 30px;
+  }
+  .cj-cuerpo h3 {
+    margin: 26px 0 10px;
+    font-size: .72rem;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .cajon .mini.pri {
+    background: var(--ac);
+    border-color: var(--ac);
+    color: var(--on-ac);
+  }
+  .cajon .mini.pri:hover {
+    filter: brightness(1.08);
+  }
+  .cajon textarea {
+    border: 0;
+    border-radius: 16px;
+    background-color: var(--break);
+    background-image: repeating-linear-gradient(transparent 0 25px, var(--line) 25px 26px);
+    background-attachment: local;
+    line-height: 26px;
+    padding: 8px 16px;
+  }
+  #menu {
+    width: min(470px, 94vw);
+  }
+  #menu[data-sec=est] {
+    --ac: var(--t3);
+  }
+  #menu[data-sec=ag] {
+    --ac: var(--t1);
+  }
+  #menu[data-sec=cal] {
+    --ac: var(--t2);
+  }
+  .cj-cuerpo section>.cifras {
+    margin-top: 16px;
+  }
+
+  /* -- Controles y formularios -- */
+  .mini {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    border-radius: 12px;
+    cursor: pointer;
+    min-width: 36px;
+    height: 36px;
+    padding: 0 12px;
+    font-size: .85rem;
+    font-weight: 600;
+  }
+  .mini:hover {
+    background: var(--break);
+  }
+  .mini.pri {
+    background: var(--ink);
+    color: var(--surface);
+    border-color: var(--ink);
+  }
+  .nav-f {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .nav-f strong {
+    flex: 1;
+    text-align: center;
+    text-transform: capitalize;
+  }
+  .nav-f .mini[aria-label] {
+    border-radius: 50%;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    font-size: 1.1rem;
+  }
+  .nav-f strong {
+    font-size: 1.02rem;
+  }
+  .nuevo {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 10px;
+    border-radius: 16px;
+    background: var(--break);
+  }
+  .nuevo input[type=text] {
+    grid-column: 1/-1;
+  }
+  .nuevo input,
+  .nuevo select {
+    background: var(--surface);
+  }
+  #ag-input {
+    flex: 1;
+  }
+
+  /* -- Calendario mensual -- */
+  .cal {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    margin-top: 14px;
+  }
+  .cal .dn {
+    font-size: .72rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-align: center;
+  }
+  .cal button {
+    aspect-ratio: 1;
+    border: 1.5px solid transparent;
+    background: var(--break);
+    color: var(--ink);
+    border-radius: 10px;
+    font: inherit;
+    font-size: .82rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 2px 4px;
+    cursor: pointer;
+  }
+  .cal button:hover {
+    border-color: var(--muted);
+  }
+  .cal button.hoy-c {
+    border-color: var(--today);
+    font-weight: 700;
+  }
+  .cal button.sel-c {
+    background: var(--ink);
+    color: var(--surface);
+  }
+  .pts {
+    display: flex;
+    gap: 2px;
+    height: 8px;
+  }
+  .pts i {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1.5px currentColor;
+  }
+  .cal {
+    gap: 5px;
+    margin-top: 16px;
+  }
+  .cal button {
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--break) 80%, transparent);
+  }
+  .cal button.fin {
+    color: var(--muted);
+  }
+  .cal button.hoy-c {
+    background: color-mix(in srgb, var(--ac) 16%, var(--surface));
+    border-color: var(--ac);
+    color: var(--ink);
+  }
+  .cal button.sel-c {
+    background: var(--ac);
+    border-color: var(--ac);
+    color: var(--on-ac);
+  }
+
+  /* -- Listas, tarjetas y notas -- */
+  .lista {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+  }
+  .lista li {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .lista .vacio {
+    color: var(--muted);
+    font-size: .86rem;
+  }
+  .lista select {
+    max-width: 46%;
+  }
+  .lista .ex-txt {
+    flex: 1;
+  }
+  .borrar {
+    flex: none;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font-size: 1.3rem;
+    cursor: pointer;
+    border-radius: 8px;
+    width: 30px;
+    height: 30px;
+    line-height: 1;
+  }
+  .borrar:hover {
+    background: var(--break);
+    color: var(--ink);
+  }
+  .lista em,
+  .prox em {
+    font-style: normal;
+    font-size: .72rem;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 99px;
+    white-space: nowrap;
+  }
+  .prox button {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    text-align: left;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: .84rem;
+    padding: 8px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .prox button:hover {
+    background: var(--break);
+  }
+  .prox button span {
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .prox b {
+    text-transform: capitalize;
+    min-width: 78px;
+  }
+  #tareas .tx {
+    flex: 1;
+    font-size: .9rem;
+    overflow-wrap: anywhere;
+  }
+  #tareas li.hecha .tx {
+    text-decoration: line-through;
+    color: var(--muted);
+  }
+  #tareas input[type=checkbox] {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--ac);
+  }
+  .peq {
+    color: var(--muted);
+    font-size: .8rem;
+    margin: 6px 0 0;
+  }
+  .lista {
+    gap: 8px;
+  }
+  .lista .vacio {
+    justify-content: center;
+    padding: 16px;
+    border: 1.5px dashed var(--line);
+    border-radius: 14px;
+    text-align: center;
+  }
+  .lista li.tarj {
+    background: var(--break);
+    border-radius: 14px;
+    padding: 9px 10px;
+  }
+  .lista li.mm {
+    background: var(--mm);
+    color: var(--mm-t);
+  }
+  .lista li.pj {
+    background: var(--pj);
+    color: var(--pj-t);
+  }
+  .lista li.so {
+    background: var(--so);
+    color: var(--so-t);
+  }
+  .lista li.ipe {
+    background: var(--ipe);
+    color: var(--ipe-t);
+  }
+  .lista li.sos {
+    background: var(--sos);
+    color: var(--sos-t);
+  }
+  .lista li.sr {
+    background: var(--sr);
+    color: var(--sr-t);
+  }
+  .lista li.aw {
+    background: var(--aw);
+    color: var(--aw-t);
+  }
+  .lista li.di {
+    background: var(--di);
+    color: var(--di-t);
+  }
+  .lista li.pr {
+    background: var(--pr);
+    color: var(--pr-t);
+  }
+  .lista li.tarj input[type=text],
+  .lista li.tarj select {
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+    color: inherit;
+    border-color: transparent;
+  }
+  .lista li.tarj em {
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+    color: inherit;
+  }
+  .lista li.tarj .borrar {
+    color: inherit;
+    opacity: .6;
+  }
+  #tareas li.hecha {
+    opacity: .7;
+  }
+  #tareas li.hecha .tx {
+    color: inherit;
+    opacity: .6;
+  }
+  .prog {
+    height: 7px;
+    border-radius: 99px;
+    background: var(--break);
+    overflow: hidden;
+    margin-top: 10px;
+  }
+  .prog span {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--ac);
+    border-radius: 99px;
+    transition: width .3s;
+  }
+  .prox button {
+    display: block;
+    border: 0;
+    background: var(--break);
+    border-radius: 14px;
+    padding: 10px 12px;
+  }
+  .prox .r1,
+  .prox .r2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .prox .r2 {
+    margin-top: 6px;
+  }
+  .prox small {
+    margin-left: auto;
+    font-size: .74rem;
+    font-weight: 600;
+    color: var(--ac);
+  }
+  #ex-lista {
+    margin-top: 10px;
+  }
+
+  /* -- Tarjeta de fecha -- */
+  .hero {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 16px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--ac) 13%, var(--surface));
+  }
+  .hero .hn {
+    font-size: 2.3rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -.03em;
+    color: var(--ac);
+    min-width: 2ch;
+    text-align: center;
+  }
+  .hero .ht {
+    display: block;
+    font-size: .86rem;
+    color: var(--muted);
+    text-transform: capitalize;
+    line-height: 1.35;
+  }
+  .hero .ht strong {
+    display: block;
+    font-size: 1.05rem;
+    color: var(--ink);
+  }
+  .hero .hoyb {
+    margin-left: auto;
+    font-style: normal;
+    font-size: .72rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 99px;
+    background: var(--ac);
+    color: var(--on-ac);
+  }
+
+  /* -- Pestañas de sección -- */
+  .pest button:focus-visible {
+    outline: 3px solid var(--ink);
+    outline-offset: 2px;
+  }
+  .pest {
+    display: flex;
+    gap: 6px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .pest button {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: .78rem;
+    font-weight: 600;
+    padding: 9px 4px;
+    border-radius: 12px;
+    cursor: pointer;
+  }
+  .pest button:hover {
+    background: var(--break);
+    color: var(--ink);
+  }
+  .pest button[aria-selected=true] {
+    background: var(--ac);
+    color: var(--on-ac);
+  }
+
+  /* ==========================================================================
+     10. SELECTOR DE VISTA (Horario Escolar / Horario Rutina)
+     ========================================================================== */
+  .selector-modo {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 99px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    box-shadow: 0 4px 16px rgba(20, 30, 50, .12);
+  }
+  .selector-modo button {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: .86rem;
+    font-weight: 600;
+    padding: 9px 18px;
+    border-radius: 99px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .selector-modo button:hover { color: var(--ink); }
+  .selector-modo button[aria-selected=true] { background: var(--ink); color: var(--surface); }
+  .selector-modo button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .selector-modo .corto { display: none; }
+
+  /* -- Botones suaves (barra de rutina y diálogo) -- */
+  .btn-suave {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: .85rem;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 99px;
+    cursor: pointer;
+  }
+  .btn-suave:hover { background: var(--break); }
+  .btn-suave.pri { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+  .btn-suave.pri:hover { filter: brightness(1.15); }
+  .btn-suave.peligro { color: var(--t4); margin-right: auto; }
+  .btn-suave[hidden] { display: none; }
+  .btn-suave:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+  /* ==========================================================================
+     11. HORARIO RUTINA (parrilla lunes–domingo, tareas editables)
+     ========================================================================== */
+  /* -- Barra de herramientas -- */
+  .rut-barra {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 16px;
+    margin-bottom: 14px;
+  }
+  .rut-barra p { margin: 0; flex: 1; min-width: 220px; color: var(--muted); font-size: .86rem; }
+  .rut-acciones { display: flex; flex-wrap: wrap; gap: 8px; }
+  .rut-aviso { min-height: 1.4em; margin: 8px 2px 0; font-size: .85rem; color: var(--t4); font-weight: 600; }
+
+  /* -- Parrilla semanal (columna de horas + 7 días; filas = horas) -- */
+  .rut-wrap { --fila-h: 52px; }
+  .rut-grid {
+    display: grid;
+    grid-template-columns: 56px repeat(7, minmax(118px, 1fr));
+    grid-template-rows: 40px repeat(16, var(--fila-h));
+    gap: 4px;
+    min-width: 920px;
+  }
+  .rut-dia {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    font-size: .88rem;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .rut-dia.es-hoy { background: var(--today); color: var(--surface); }
+  .rut-hora {
+    padding: 4px 8px 0 0;
+    text-align: right;
+    font-size: .75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+  }
+  .rut-hora.ahora-h { color: var(--now); font-weight: 700; }
+
+  /* -- Huecos libres (clic para añadir; destino al arrastrar) -- */
+  .slot {
+    padding: 0;
+    border: 1px dashed transparent;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--break) 70%, transparent);
+    color: color-mix(in srgb, var(--muted) 30%, transparent);
+    font: inherit;
+    cursor: pointer;
+  }
+  .slot.col-hoy { background: color-mix(in srgb, var(--today) 9%, var(--break)); }
+  .slot:hover { border-color: var(--muted); color: var(--muted); }
+  .slot.sobre { border-color: var(--now); background: color-mix(in srgb, var(--now) 16%, var(--surface)); }
+
+  /* -- Tareas (bloques; el color viene de la clase de categoría) -- */
+  .tarea {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    text-align: left;
+    font: inherit;
+    font-size: .82rem;
+    line-height: 1.3;
+    cursor: grab;
+    box-shadow: 0 1px 2px rgba(20, 30, 50, .1);
+    transition: box-shadow .15s, transform .15s;
+  }
+  .tarea b { font-weight: 600; }
+  .tarea small { font-size: .72rem; opacity: .7; }
+  .tarea:hover { box-shadow: 0 6px 16px rgba(20, 30, 50, .2); transform: translateY(-1px); }
+  .tarea:active { cursor: grabbing; }
+  .tarea:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .tarea.moviendo { opacity: .4; }
+  .rut-grid.arrastrando .tarea:not(.moviendo) { pointer-events: none; }
+
+  /* -- Diálogo de edición -- */
+  .dialogo {
+    width: min(430px, 92vw);
+    padding: 0;
+    border: 0;
+    border-radius: 18px;
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: 0 20px 60px rgba(10, 20, 30, .35);
+  }
+  .dialogo::backdrop { background: rgba(10, 15, 25, .5); }
+  .dialogo-cuerpo { display: grid; gap: 14px; padding: 22px; }
+  .dialogo h2 { margin: 0; font-size: 1.15rem; }
+  .dialogo label { display: grid; gap: 6px; font-size: .8rem; font-weight: 600; color: var(--muted); }
+  .dialogo input,
+  .dialogo select {
+    min-width: 0;
+    padding: 9px 11px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--bg);
+    color: var(--ink);
+    font: inherit;
+    font-size: .92rem;
+  }
+  .dialogo input:focus,
+  .dialogo select:focus { outline: 2px solid var(--today); }
+  .dialogo .fila3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .dialogo .error { min-height: 1.2em; margin: 0; font-size: .82rem; font-weight: 600; color: var(--t4); }
+  .dialogo .botones { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+
+  /* -- Menú de rutina (vacío por ahora) -- */
+  .seccion-vacia {
+    margin-top: 24px;
+    padding: 28px 18px;
+    border: 1.5px dashed var(--line);
+    border-radius: 16px;
+    text-align: center;
+    color: var(--muted);
+  }
+  .seccion-vacia p { margin: 0 0 6px; }
+
+  /* ==========================================================================
+     12. ADAPTACIÓN: RESPONSIVE Y MOVIMIENTO REDUCIDO
+     ========================================================================== */
+  @media (max-width: 700px) {
+    .panel {
+      grid-template-columns: 1fr;
+    }
+    .cifras {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .mods li {
+      grid-template-columns: 1fr auto;
+      gap: 8px 12px;
+    }
+    .mods .tr {
+      grid-column: 1/-1;
+      order: 3;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .selector-modo .largo { display: none; }
+    .selector-modo .corto { display: inline; }
+    .selector-modo button { padding: 9px 14px; }
+    main {
+      padding: 72px 12px 40px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    td.c,
+    td.c::before,
+    .barra span {
+      transition: none;
+    }
+  }
+
+  /* ==========================================================================
+     13. IMPRESIÓN (solo el horario de la vista activa)
+     ========================================================================== */
+  @page {
+    size: A4 landscape;
+    margin: 12mm;
+  }
+
+  @media print {
+    .selector-modo, #menu-rutina, .rut-barra, .rut-aviso { display: none; }
+    .rut-wrap { --fila-h: 30px; }
+    .rut-grid { min-width: 0; }
+    .tarea { padding: 3px 6px; font-size: .7rem; box-shadow: none; }
+    .tarea small { display: none; }
+    .cajon,
+    .velo {
+      display: none;
+    }
+    .hamb,
+    #menu {
+      display: none;
+    }
+    h1 {
+      font-size: 1.5rem;
+    }
+    header.top {
+      margin-bottom: 10px;
+    }
+    table {
+      border-spacing: 4px;
+    }
+    td.c {
+      height: 54px;
+      padding: 8px 10px;
+      font-size: .82rem;
+    }
+    td.c::before {
+      inset: 4px;
+    }
+    td.c small {
+      margin-top: 2px;
+    }
+    th.h {
+      font-size: .72rem;
+    }
+    .llave {
+      margin-top: 12px;
+    }
+    * {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    body {
+      background: #fff;
+    }
+    main {
+      padding: 0;
+      max-width: none;
+    }
+    .tema,
+    .acciones,
+    .panel,
+    .selinfo,
+    #estadisticas,
+    .llave .no-print {
+      display: none;
+    }
+    .wrap {
+      box-shadow: none;
+      overflow: visible;
+      border: 0;
+      padding: 0;
+    }
+    table {
+      min-width: 0;
+    }
+    td.c {
+      transition: none;
+    }
+    td.c.hoy,
+    td.c.ahora {
+      outline: none;
+      box-shadow: none;
+    }
+    td.c.ahora::after {
+      display: none;
+    }
+    thead th.hoy {
+      background: none;
+      color: var(--muted);
+    }
+    tr.now-row>th.h {
+      color: var(--muted);
+    }
+    tr.now-row>th.h b {
+      color: var(--ink);
+    }
+    tr.rec.now-row>td {
+      background: var(--break);
+      color: var(--muted);
+      font-weight: 500;
+    }
+  }
+</style>
+</head>
+<body>
+<!-- ===== SELECTOR DE VISTA: fijo, arriba al centro ===== -->
+<nav class="selector-modo" role="tablist" aria-label="Elegir horario">
+  <button type="button" role="tab" data-modo="escolar" aria-selected="true"><span class="largo">Horario Escolar</span><span class="corto">Escolar</span></button>
+  <button type="button" role="tab" data-modo="rutina" aria-selected="false"><span class="largo">Horario Rutina</span><span class="corto">Rutina</span></button>
+</nav>
+
+<main>
+  <!-- ===== CABECERA: título y acciones (imprimir, tema) ===== -->
+  <header class="top">
+    <div>
+      <h1 id="titulo">Horario Escolar</h1>
+      <p id="subtitulo">Clases de 08:30 a 14:30 · sesiones de 55 minutos · dos recreos</p>
+    </div>
+    <div class="acciones">
+      <button type="button" class="tema" id="imprimir"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><rect x="6" y="14" width="12" height="7" rx="1"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/></svg><span>Imprimir</span></button>
+      <button type="button" class="tema" id="tema"></button>
+    </div>
+  </header>
+
+  <!-- ===================== VISTA: HORARIO ESCOLAR ===================== -->
+  <div id="vista-escolar" class="vista">
+    <!-- ===== PANEL DE HORA ACTUAL: reloj, estado y progreso de la clase ===== -->
+    <section class="panel">
+      <div class="reloj"><time id="reloj">--:--:--</time><span id="fecha"></span></div>
+      <div class="estado">
+        <span class="pill" id="pill">Cargando</span>
+        <strong id="clase"></strong>
+        <p id="detalle"></p>
+        <div class="barra" id="barra" hidden><span id="prog"></span></div>
+      </div>
+    </section>
+
+    <!-- ===== HORARIO: tabla semanal (las celdas llevan clase de módulo + profesor tN) ===== -->
+    <div class="wrap">
+      <table>
+        <caption class="sr-only">Horario semanal de lunes a viernes</caption>
+        <thead>
+          <tr>
+            <th class="hora" scope="col">Hora</th>
+            <th scope="col" data-d="1">Lunes</th>
+            <th scope="col" data-d="2">Martes</th>
+            <th scope="col" data-d="3">Miércoles</th>
+            <th scope="col" data-d="4">Jueves</th>
+            <th scope="col" data-d="5">Viernes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Bloque 1 -->
+          <tr>
+            <th class="h" scope="row"><b>1ª hora</b>08:30 – 09:25</th>
+            <td class="c mm t1" data-d="1" rowspan="2" title="María Francisca Machado Moraga"><span>Montaje y Mantenimiento</span><small>María Francisca</small></td>
+            <td class="c so t2" data-d="2" title="Manuel Manchado Moraga"><span>Sistemas Operativos en Redes</span><small>Manuel</small></td>
+            <td class="c mm t1" data-d="3" rowspan="2" title="María Francisca Machado Moraga"><span>Montaje y Mantenimiento</span><small>María Francisca</small></td>
+            <td class="c di t4" data-d="4" title="María Soledad Casado Sanz"><span>Digitalización</span><small>María Soledad</small></td>
+            <td class="c aw t4" data-d="5" title="María Soledad Casado Sanz"><span>Aplicaciones Web</span><small>María Soledad</small></td>
+          </tr>
+          <tr>
+            <th class="h" scope="row"><b>2ª hora</b>09:25 – 10:20</th>
+            <td class="c pr t4" data-d="2" title="María Soledad Casado Sanz"><span>Programación</span><small>María Soledad</small></td>
+            <td class="c so t2" data-d="4" title="Manuel Manchado Moraga"><span>Sistemas Operativos en Redes</span><small>Manuel</small></td>
+            <td class="c so t2" data-d="5" title="Manuel Manchado Moraga"><span>Sistemas Operativos en Redes</span><small>Manuel</small></td>
+          </tr>
+          <tr class="rec"><th class="h" scope="row">10:20 – 10:40</th><td colspan="5">Recreo</td></tr>
+
+          <!-- Bloque 2 -->
+          <tr>
+            <th class="h" scope="row"><b>3ª hora</b>10:40 – 11:35</th>
+            <td class="c pr t4" data-d="1" title="María Soledad Casado Sanz"><span>Programación</span><small>María Soledad</small></td>
+            <td class="c sr t3" data-d="2" rowspan="2" title="Saúl González Gozález de Mendoza"><span>Servicios en Red</span><small>Saúl</small></td>
+            <td class="c aw t4" data-d="3" rowspan="2" title="María Soledad Casado Sanz"><span>Aplicaciones Web</span><small>María Soledad</small></td>
+            <td class="c ipe t2" data-d="4" title="Manuel Manchado Moraga"><span>IPE II</span><small>Manuel</small></td>
+            <td class="c so t2" data-d="5" title="Manuel Manchado Moraga"><span>Sistemas Operativos en Redes</span><small>Manuel</small></td>
+          </tr>
+          <tr>
+            <th class="h" scope="row"><b>4ª hora</b>11:35 – 12:30</th>
+            <td class="c so t2" data-d="1" title="Manuel Manchado Moraga"><span>Sistemas Operativos en Redes</span><small>Manuel</small></td>
+            <td class="c sr t3" data-d="4" title="Saúl González Gozález de Mendoza"><span>Servicios en Red</span><small>Saúl</small></td>
+            <td class="c mm t1" data-d="5" title="María Francisca Machado Moraga"><span>Montaje y Mantenimiento</span><small>María Francisca</small></td>
+          </tr>
+          <tr class="rec"><th class="h" scope="row">12:30 – 12:40</th><td colspan="5">Recreo</td></tr>
+
+          <!-- Bloque 3 -->
+          <tr>
+            <th class="h" scope="row"><b>5ª hora</b>12:40 – 13:35</th>
+            <td class="c ipe t2" data-d="1" title="Manuel Manchado Moraga"><span>IPE II</span><small>Manuel</small></td>
+            <td class="c aw t4" data-d="2" title="María Soledad Casado Sanz"><span>Aplicaciones Web</span><small>María Soledad</small></td>
+            <td class="c ipe t2" data-d="3" title="Manuel Manchado Moraga"><span>IPE II</span><small>Manuel</small></td>
+            <td class="c mm t1" data-d="4" title="María Francisca Machado Moraga"><span>Montaje y Mantenimiento</span><small>María Francisca</small></td>
+            <td class="c sr t3" data-d="5" rowspan="2" title="Saúl González Gozález de Mendoza"><span>Servicios en Red</span><small>Saúl</small></td>
+          </tr>
+          <tr>
+            <th class="h" scope="row"><b>6ª hora</b>13:35 – 14:30</th>
+            <td class="c sr t3" data-d="1" title="Saúl González Gozález de Mendoza"><span>Servicios en Red</span><small>Saúl</small></td>
+            <td class="c pj t1" data-d="2" title="María Francisca Machado Moraga"><span>Proyecto</span><small>María Francisca</small></td>
+            <td class="c sos t2" data-d="3" title="Manuel Manchado Moraga"><span>Sostenibilidad</span><small>Manuel</small></td>
+            <td class="c pr t4" data-d="4" title="María Soledad Casado Sanz"><span>Programación</span><small>María Soledad</small></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ===== INFO DE SELECCIÓN Y LEYENDA ===== -->
+    <p class="selinfo" id="selinfo" aria-live="polite"></p>
+
+    <div class="llave">
+      <span class="no-print"><i class="dot-hoy"></i>Día de hoy</span>
+      <span class="no-print"><i class="dot-ahora"></i>Hora actual</span>
+      <span class="sep no-print"></span>
+      <span><i class="fr t1"></i>María Francisca Machado Moraga</span>
+      <span><i class="fr t2"></i>Manuel Manchado Moraga</span>
+      <span><i class="fr t3"></i>Saúl González Gozález de Mendoza</span>
+      <span><i class="fr t4"></i>María Soledad Casado Sanz</span>
+    </div>
+  </div>
+
+  <!-- ===================== VISTA: HORARIO RUTINA ===================== -->
+  <div id="vista-rutina" class="vista" hidden>
+    <!-- Barra de herramientas -->
+    <div class="rut-barra">
+      <p>Clic en un hueco para añadir una tarea · clic en una tarea para editarla · arrástrala para moverla de día u hora.</p>
+      <div class="rut-acciones">
+        <button type="button" class="btn-suave" id="rut-ejemplo">Restaurar ejemplo</button>
+        <button type="button" class="btn-suave pri" id="rut-nueva">+ Nueva tarea</button>
+      </div>
+    </div>
+
+    <!-- Parrilla (se genera desde JavaScript) -->
+    <div class="wrap rut-wrap"><div class="rut-grid" id="rut-grid"></div></div>
+    <p class="rut-aviso" id="rut-aviso" role="status"></p>
+
+    <!-- Leyenda de categorías (se genera desde JavaScript) -->
+    <div class="llave" id="rut-leyenda"></div>
+  </div>
+</main>
+
+<!-- ===== MENÚ LATERAL: botón hamburguesa, fondo y panel con pestañas ===== -->
+<button type="button" class="hamb" id="hamb" aria-label="Abrir menú" aria-controls="menu" aria-expanded="false"><span></span><span></span><span></span></button>
+<div class="velo" id="velo" hidden></div>
+
+<aside class="cajon izq" id="menu" data-sec="est" aria-label="Menú" inert>
+  <div class="cj-cab"><div><h2>Menú</h2><p class="sub">Estadísticas, agenda y calendario</p></div><button type="button" class="cerrar" aria-label="Cerrar menú">×</button></div>
+  <nav class="pest" role="tablist" aria-label="Secciones">
+    <button type="button" role="tab" data-sec="est" aria-selected="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Estadísticas</button>
+    <button type="button" role="tab" data-sec="ag" aria-selected="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h13a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3z"/><path d="M8 9h8M8 13h6"/></svg>Agenda</button>
+    <button type="button" role="tab" data-sec="cal" aria-selected="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Calendario</button>
+  </nav>
+  <div class="cj-cuerpo">
+    <!-- Sección: Estadísticas de horas -->
+    <section id="sec-est" role="tabpanel"None>
+      <div class="cifras">
+        <div><b id="s-total">–</b><span>Horas semanales</span></div>
+        <div><b id="s-mod">–</b><span>Módulos</span></div>
+        <div><b id="s-dia">–</b><span>Horas por día</span></div>
+        <div><b id="s-min">–</b><span>Tiempo lectivo real</span></div>
+      </div>
+      <details class="acc" open>
+        <summary>Horas por módulo a la semana<em id="m-meta"></em></summary>
+        <ul class="mods" id="mods"></ul>
+      </details>
+      <details class="acc">
+        <summary>Horas por profesor<em id="p-meta"></em></summary>
+        <ul class="mods" id="profs"></ul>
+      </details>
+
+    </section>
+    <!-- Sección: Agenda (tareas y notas) -->
+    <section id="sec-ag" role="tabpanel" hidden>
+      <div class="nav-f">
+        <button type="button" class="mini" id="ag-prev" aria-label="Día anterior">‹</button>
+        <input type="date" id="ag-input" aria-label="Fecha">
+        <button type="button" class="mini" id="ag-next" aria-label="Día siguiente">›</button>
+        <button type="button" class="mini" id="ag-hoy">Hoy</button>
+      </div>
+      <div class="hero" id="ag-fecha"></div>
+      <h3>Tareas enviadas</h3>
+      <ul class="lista" id="tareas"></ul>
+      <div class="prog" id="ag-progb"><span id="ag-prog"></span></div>
+      <p class="peq" id="ag-cuenta"></p>
+      <div class="nuevo">
+        <input type="text" id="ag-txt" placeholder="Nueva tarea…" maxlength="120">
+        <select id="ag-mod" aria-label="Módulo"></select>
+        <button type="button" class="mini pri" id="ag-add">+ Añadir tarea</button>
+      </div>
+      <h3>Notas del día</h3>
+      <textarea id="notas" placeholder="Escribe aquí tus notas…" aria-label="Notas del día"></textarea>
+      <p class="peq" id="guardado">Se guardan automáticamente en este navegador.</p>
+
+    </section>
+    <!-- Sección: Calendario de exámenes -->
+    <section id="sec-cal" role="tabpanel" hidden>
+      <div class="nav-f">
+        <button type="button" class="mini" id="mes-ant" aria-label="Mes anterior">‹</button>
+        <strong id="mes-tit"></strong>
+        <button type="button" class="mini" id="mes-sig" aria-label="Mes siguiente">›</button>
+        <button type="button" class="mini" id="mes-hoy">Hoy</button>
+      </div>
+      <div class="cal" id="cal"></div>
+      <div class="hero" id="cal-fecha"></div>
+      <ul class="lista" id="ex-lista"></ul>
+      <div class="nuevo">
+        <input type="text" id="ex-txt" placeholder="Tema del examen (opcional)" maxlength="80">
+        <select id="ex-mod" aria-label="Módulo"></select>
+        <button type="button" class="mini pri" id="ex-add">+ Añadir examen</button>
+      </div>
+      <h3>Próximos exámenes</h3>
+      <ul class="lista prox" id="ex-prox"></ul>
+
+    </section>
+  </div>
+</aside>
+
+<!-- Menú de la vista Rutina (sección vacía por ahora) -->
+<aside class="cajon izq" id="menu-rutina" aria-label="Menú de rutina" inert>
+  <div class="cj-cab"><div><h2>Menú · Rutina</h2><p class="sub">Secciones de Horario Rutina</p></div><button type="button" class="cerrar" aria-label="Cerrar menú">×</button></div>
+  <div class="cj-cuerpo">
+    <div class="seccion-vacia">
+      <p><strong>Esta sección está vacía por ahora</strong></p>
+      <p>Aquí irán las herramientas de la rutina.</p>
+    </div>
+  </div>
+</aside>
+
+<!-- ===== DIÁLOGO: crear / editar una tarea de la rutina ===== -->
+<dialog class="dialogo" id="rut-dialogo" aria-labelledby="dlg-titulo">
+  <div class="dialogo-cuerpo" id="rut-form">
+    <h2 id="dlg-titulo">Nueva tarea</h2>
+    <label>Nombre<input type="text" id="f-titulo" maxlength="60" placeholder="Ej.: Ir a la compra" autocomplete="off"></label>
+    <label>Categoría<select id="f-cat"></select></label>
+    <div class="fila3">
+      <label>Día<select id="f-dia"></select></label>
+      <label>Inicio<select id="f-ini"></select></label>
+      <label>Duración<select id="f-dur"></select></label>
+    </div>
+    <p class="error" id="f-error" role="alert"></p>
+    <div class="botones">
+      <button type="button" class="btn-suave peligro" id="f-borrar">Eliminar</button>
+      <button type="button" class="btn-suave" id="f-cancelar">Cancelar</button>
+      <button type="button" class="btn-suave pri" id="f-guardar">Guardar</button>
+    </div>
+  </div>
+</dialog>
+<!-- ===== SCRIPT 1: HORARIO (estadísticas, reloj, tema, impresión, selección) ===== -->
+<script>
+/*
+ * Secciones:
+ *   1. Datos del horario      (franjas, celdas, profesores)
+ *   2. Estadísticas de horas  (por módulo y por profesor)
+ *   3. Reloj y hora actual    (panel + marcas en la tabla)
+ *   4. Modo claro / oscuro
+ *   5. Selección de módulos   (clic en una celda)
+ *   6. Impresión              (solo el horario de la vista activa)
+ */
+(function () {
+  /* ---------- 1. Datos del horario ---------- */
+  // Franjas [inicio, fin] en minutos desde las 00:00, una por fila de <tbody> (filas 2 y 5 = recreos)
+  var T = [[510,565],[565,620],[620,640],[640,695],[695,750],[750,760],[760,815],[815,870]];
+  // Cada celda de módulo con su día (d), franja (s, e), horas (h), módulo (cls) y profesor (t)
+  var rows = [].slice.call(document.querySelectorAll('tbody tr'));
+  var cells = [].slice.call(document.querySelectorAll('td.c')).map(function (td) {
+    var i = rows.indexOf(td.parentNode), n = td.rowSpan || 1;
+    var cls = [].slice.call(td.classList).filter(function (c) { return c !== 'c'; })[0];
+    return { el: td, d: +td.dataset.d, s: T[i][0], e: T[i + n - 1][1], h: n, name: td.querySelector('span').textContent.trim(), cls: cls, t: (td.className.match(/\bt\d\b/) || [])[0] };
+  });
+
+  // Nombre completo de cada profesor (t1..t4 = clase de color de su marco)
+  var TE = {
+    t1: 'María Francisca Machado Moraga',
+    t2: 'Manuel Manchado Moraga',
+    t3: 'Saúl González Gozález de Mendoza',
+    t4: 'María Soledad Casado Sanz'
+  };
+
+  /* ---------- 2. Estadísticas de horas ---------- */
+  var by = {};
+  cells.forEach(function (c) {
+    by[c.name] = by[c.name] || { name: c.name, cls: c.cls, t: c.t, h: 0 };
+    by[c.name].h += c.h;
+  });
+  var list = Object.keys(by).map(function (k) { return by[k]; })
+    .sort(function (a, b) { return b.h - a.h || a.name.localeCompare(b.name, 'es'); });
+  var total = list.reduce(function (t, m) { return t + m.h; }, 0), max = list[0].h;
+  function dur(min) { var h = Math.floor(min / 60), r = min % 60; return h + ' h' + (r ? ' ' + r + ' min' : ''); }
+  document.getElementById('s-total').textContent = total + ' h';
+  document.getElementById('s-mod').textContent = list.length;
+  document.getElementById('s-dia').textContent = total / 5 + ' h';
+  document.getElementById('s-min').textContent = dur(total * 55);
+  document.getElementById('mods').innerHTML = list.map(function (m) {
+    return '<li><span class="nm"><i class="' + m.cls + ' ' + m.t + '"></i><span>' + m.name + '<small>' + TE[m.t] + '</small></span></span>' +
+      '<span class="tr"><b class="' + m.cls + '" style="width:' + (m.h / max * 100) + '%"></b></span>' +
+      '<span class="hh">' + m.h + ' h<small>' + dur(m.h * 55) + '</small></span></li>';
+  }).join('');
+
+  var byT = {};
+  list.forEach(function (m) {
+    byT[m.t] = byT[m.t] || { t: m.t, h: 0, mods: [] };
+    byT[m.t].h += m.h; byT[m.t].mods.push(m.name);
+  });
+  var pl = Object.keys(byT).map(function (k) { return byT[k]; }).sort(function (a, b) { return b.h - a.h; });
+  document.getElementById('profs').innerHTML = pl.map(function (p) {
+    return '<li><span class="nm"><i class="fr ' + p.t + '"></i><span>' + TE[p.t] + '<small>' + p.mods.join(', ') + '</small></span></span>' +
+      '<span class="tr"><b class="tb ' + p.t + '" style="width:' + (p.h / pl[0].h * 100) + '%"></b></span>' +
+      '<span class="hh">' + p.h + ' h<small>' + dur(p.h * 55) + '</small></span></li>';
+  }).join('');
+
+  /* ---------- 3. Reloj y hora actual ---------- */
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function hm(m) { return pad(Math.floor(m / 60)) + ':' + pad(m % 60); }
+  var $ = function (id) { return document.getElementById(id); };
+
+  function tick() {
+    var now = new Date(), d = now.getDay(), m = now.getHours() * 60 + now.getMinutes();
+    $('reloj').textContent = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+    $('fecha').textContent = now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+    document.querySelectorAll('.hoy,.ahora,.now-row').forEach(function (e) {
+      e.classList.remove('hoy', 'ahora', 'now-row');
+    });
+    var wk = d >= 1 && d <= 5;
+    if (wk) document.querySelectorAll('[data-d="' + d + '"]').forEach(function (e) { e.classList.add('hoy'); });
+
+    var pill = $('pill'), clase = $('clase'), det = $('detalle'), bar = $('barra');
+    pill.classList.remove('on'); bar.hidden = true;
+
+    if (!wk) {
+      var lun = cells.filter(function (c) { return c.d === 1 && c.s === 510; })[0];
+      pill.textContent = 'Fin de semana'; clase.textContent = 'Hoy no hay clases';
+      det.textContent = 'El lunes a las 08:30: ' + lun.name; return;
+    }
+    var today = cells.filter(function (c) { return c.d === d; });
+    var first = today.filter(function (c) { return c.s === 510; })[0];
+    if (m < 510) {
+      pill.textContent = 'Antes de clase'; clase.textContent = 'Las clases empiezan a las 08:30';
+      det.textContent = 'Primera clase: ' + first.name; return;
+    }
+    if (m >= 870) {
+      pill.textContent = 'Fuera de horario'; clase.textContent = 'Las clases de hoy han terminado';
+      det.textContent = 'Terminaron a las 14:30'; return;
+    }
+    var ri = -1;
+    T.forEach(function (t, i) { if (m >= t[0] && m < t[1]) ri = i; });
+    rows[ri].classList.add('now-row');
+    var cur = today.filter(function (c) { return m >= c.s && m < c.e; })[0];
+    var nxt = today.filter(function (c) { return c.s > m; }).sort(function (a, b) { return a.s - b.s; })[0];
+    var sig = nxt ? ' · Siguiente: ' + nxt.name + ' (' + hm(nxt.s) + ')' : '';
+    if (cur) {
+      cur.el.classList.add('ahora');
+      pill.textContent = 'En clase'; pill.classList.add('on');
+      clase.textContent = cur.name;
+      det.textContent = TE[cur.t] + ' · hasta las ' + hm(cur.e) + ' · quedan ' + (cur.e - m) + ' min' + sig;
+      bar.hidden = false; $('prog').style.width = ((m - cur.s) / (cur.e - cur.s) * 100) + '%';
+    } else {
+      pill.textContent = 'Recreo'; pill.classList.add('on');
+      clase.textContent = 'Recreo hasta las ' + hm(T[ri][1]);
+      det.textContent = 'Quedan ' + (T[ri][1] - m) + ' min' + sig;
+    }
+  }
+  /* ---------- 4. Modo claro / oscuro ---------- */
+  var root = document.documentElement, btn = $('tema');
+  var SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+  var SUN = SVG + '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  var MOON = SVG + '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+  function modo() { return root.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); }
+  function pintaBoton() {
+    var osc = modo() === 'dark';
+    btn.innerHTML = (osc ? SUN : MOON) + '<span>' + (osc ? 'Modo claro' : 'Modo oscuro') + '</span>';
+  }
+  btn.addEventListener('click', function () {
+    var n = modo() === 'dark' ? 'light' : 'dark';
+    root.dataset.theme = n;
+    try { localStorage.setItem('tema', n); } catch (e) {}
+    pintaBoton();
+  });
+  pintaBoton();
+
+  /* ---------- 5. Selección de módulos ---------- */
+  var tabla = document.querySelector('table'), info = $('selinfo'), selMod = null;
+  var HINT = 'Haz clic en un módulo para resaltar todas sus horas y los marcos de las demás asignaturas del mismo profesor.';
+  function pick(mod) {
+    selMod = mod;
+    var t = mod && cells.filter(function (c) { return c.cls === mod; })[0].t;
+    tabla.classList.toggle('sel', !!mod);
+    cells.forEach(function (c) {
+      c.el.classList.toggle('sel-mod', !!mod && c.cls === mod);
+      c.el.classList.toggle('sel-prof', !!mod && c.t === t && c.cls !== mod);
+    });
+    if (!mod) { info.textContent = HINT; return; }
+    var m = list.filter(function (x) { return x.cls === mod; })[0];
+    var otros = list.filter(function (x) { return x.t === t && x.cls !== mod; }).map(function (x) { return x.name; });
+    info.innerHTML = '<b>' + m.name + '</b> · ' + m.h + ' h a la semana · ' + TE[t] +
+      (otros.length ? ' · También imparte: ' + otros.join(', ') : '');
+  }
+  cells.forEach(function (c) { c.el.tabIndex = 0; });
+  document.addEventListener('click', function (e) {
+    var td = e.target.closest('td.c');
+    if (td) {
+      var cls = cells.filter(function (c) { return c.el === td; })[0].cls;
+      pick(selMod === cls ? null : cls);
+    } else if (!e.target.closest('button')) pick(null);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') pick(null);
+    var td = e.target.closest && e.target.closest('td.c');
+    if (td && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); td.click(); }
+  });
+  pick(null);
+
+  /* ---------- 6. Impresión ---------- */
+  // Clona solo el horario en un iframe oculto (tema claro, sin marcas de hoy/ahora) y lo imprime
+  function imprime() {
+    var vista = document.querySelector('.vista:not([hidden])');
+    var wrap = vista.querySelector('.wrap').cloneNode(true);
+    wrap.querySelectorAll('.hoy,.ahora,.sel-mod,.sel-prof,.now-row,.es-hoy,.ahora-h,.col-hoy').forEach(function (e) {
+      e.classList.remove('hoy', 'ahora', 'sel-mod', 'sel-prof', 'now-row', 'es-hoy', 'ahora-h', 'col-hoy');
+    });
+    wrap.querySelectorAll('[tabindex]').forEach(function (e) { e.removeAttribute('tabindex'); });
+    var tabla = wrap.querySelector('table');
+    if (tabla) tabla.classList.remove('sel');
+    var html = '<!DOCTYPE html><html lang="es" data-theme="light"><head><meta charset="utf-8"><title>Horario semanal</title><style>' +
+      document.querySelector('style').textContent + '</style></head><body><main><header class="top"><div><h1>' + document.getElementById('titulo').textContent + '</h1><p>' +
+      document.getElementById('subtitulo').textContent + '</p></div></header>' + wrap.outerHTML +
+      vista.querySelector('.llave').outerHTML + '</main></body></html>';
+    var f = document.createElement('iframe');
+    f.setAttribute('aria-hidden', 'true');
+    f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+    document.body.appendChild(f);
+    var w = f.contentWindow;
+    w.document.open(); w.document.write(html); w.document.close();
+    setTimeout(function () {
+      try { w.focus(); w.print(); } catch (e) { window.print(); }
+      setTimeout(function () { f.remove(); }, 1500);
+    }, 350);
+  }
+  $('imprimir').addEventListener('click', imprime);
+  var modoPrevio = null;
+  window.addEventListener('beforeprint', function () {
+    modoPrevio = root.getAttribute('data-theme');
+    root.dataset.theme = 'light'; pick(null);
+  });
+  window.addEventListener('afterprint', function () {
+    if (modoPrevio) root.dataset.theme = modoPrevio; else root.removeAttribute('data-theme');
+    pintaBoton();
+  });
+  $('m-meta').textContent = list.length + ' módulos';
+  $('p-meta').textContent = pl.length + ' profesores';
+
+  tick(); setInterval(tick, 1000);
+})();
+</script>
+<!-- ===== SCRIPT 2: MENÚ LATERAL, AGENDA Y CALENDARIO DE EXÁMENES ===== -->
+<script>
+/*
+ * Secciones:
+ *   1. Utilidades             (fechas, escape HTML, localStorage)
+ *   2. Menú lateral           (uno por vista: Escolar con pestañas, Rutina vacío)
+ *   3. Calendario de exámenes (clave "examenes": { "AAAA-MM-DD": [{ id, mod, text }] })
+ *   4. Agenda                 (clave "agenda":    { "AAAA-MM-DD": { notes, tasks: [{ id, text, mod, done }] } })
+ */
+(function () {
+  /* ---------- 1. Utilidades ---------- */
+  var $ = function (id) { return document.getElementById(id); };
+  function p2(n) { return (n < 10 ? '0' : '') + n; }
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function load(k) { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch (e) { return {}; } }
+  function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function iso(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+  function parse(s) { var a = s.split('-'); return new Date(+a[0], a[1] - 1, +a[2]); }
+  function largo(d) { return d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
+  function hero(d, hoy) {
+    return '<b class="hn">' + d.getDate() + '</b><span class="ht"><strong>' + d.toLocaleDateString('es-ES', { weekday: 'long' }) + '</strong>' +
+      d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }) + '</span>' + (hoy ? '<em class="hoyb">Hoy</em>' : '');
+  }
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+  var MODS = {};
+  document.querySelectorAll('td.c').forEach(function (td) {
+    var c = [].slice.call(td.classList).filter(function (x) { return !/^(c|t\d|hoy|ahora|sel-mod|sel-prof)$/.test(x); })[0];
+    MODS[c] = td.querySelector('span').textContent.trim();
+  });
+  var keys = Object.keys(MODS).sort(function (a, b) { return MODS[a].localeCompare(MODS[b], 'es'); });
+  function opts(sel, gen) {
+    return (gen ? '<option value="">General</option>' : '') + keys.map(function (k) {
+      return '<option value="' + k + '"' + (k === sel ? ' selected' : '') + '>' + esc(MODS[k]) + '</option>';
+    }).join('');
+  }
+
+  /* ---------- 2. Menú lateral (uno por vista) ---------- */
+  var velo = $('velo'), menu = $('menu'), hamb = $('hamb'), abierto = null, SECS = ['est', 'ag', 'cal'];
+  // Cambia de pestaña dentro del menú del Horario Escolar
+  function muestra(k) {
+    menu.dataset.sec = k;
+    SECS.forEach(function (x) {
+      $('sec-' + x).hidden = x !== k;
+      menu.querySelector('.pest [data-sec="' + x + '"]').setAttribute('aria-selected', x === k);
+    });
+    menu.querySelector('.cj-cuerpo').scrollTop = 0;
+  }
+  // El menú que se abre depende de la vista activa (document.body.dataset.modo)
+  function menuActual() { return $(document.body.dataset.modo === 'rutina' ? 'menu-rutina' : 'menu'); }
+  function cierra(sinFoco) {
+    if (!abierto) return;
+    abierto.classList.remove('abierto'); abierto.inert = true; velo.hidden = true;
+    hamb.setAttribute('aria-expanded', 'false'); abierto = null;
+    if (!sinFoco) hamb.focus();
+  }
+  function abre() {
+    abierto = menuActual(); abierto.inert = false; abierto.classList.add('abierto'); velo.hidden = false;
+    hamb.setAttribute('aria-expanded', 'true'); abierto.querySelector('.cerrar').focus();
+  }
+  hamb.addEventListener('click', function () { abierto ? cierra() : abre(); });
+  velo.addEventListener('click', function () { cierra(); });
+  document.querySelectorAll('.cajon .cerrar').forEach(function (b) { b.addEventListener('click', function () { cierra(); }); });
+  menu.querySelectorAll('.pest button').forEach(function (b) { b.addEventListener('click', function () { muestra(b.dataset.sec); }); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') cierra(); });
+  document.addEventListener('modo', function () { cierra(true); });   // al cambiar de vista se cierra el menú
+
+  /* ---------- 3. Calendario de exámenes ---------- */
+  var EX = load('examenes'), vista = new Date(), diaSel = iso(new Date());
+  vista.setDate(1);
+  function guardaEx() { Object.keys(EX).forEach(function (k) { if (!EX[k].length) delete EX[k]; }); save('examenes', EX); }
+  function renderCal() {
+    var y = vista.getFullYear(), m = vista.getMonth(), hoy = iso(new Date());
+    var off = (new Date(y, m, 1).getDay() + 6) % 7, n = new Date(y, m + 1, 0).getDate();
+    $('mes-tit').textContent = vista.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    var h = ['L', 'M', 'X', 'J', 'V', 'S', 'D'].map(function (d) { return '<span class="dn">' + d + '</span>'; }).join('');
+    for (var i = 0; i < off; i++) h += '<span></span>';
+    for (var d = 1; d <= n; d++) {
+      var k = y + '-' + p2(m + 1) + '-' + p2(d), ex = EX[k] || [];
+      h += '<button type="button" data-f="' + k + '" class="' + ((off + d - 1) % 7 > 4 ? 'fin ' : '') + (k === hoy ? 'hoy-c ' : '') + (k === diaSel ? 'sel-c' : '') + '"><span>' + d + '</span><span class="pts">' +
+        ex.slice(0, 4).map(function (e) { return '<i class="' + e.mod + '"></i>'; }).join('') + '</span></button>';
+    }
+    $('cal').innerHTML = h;
+    var hoyK = iso(new Date()), a = [];
+    Object.keys(EX).sort().forEach(function (k) { if (k >= hoyK) EX[k].forEach(function (e) { a.push([k, e]); }); });
+    $('ex-prox').innerHTML = a.slice(0, 8).map(function (x) {
+      var dif = Math.round((parse(x[0]) - parse(hoyK)) / 864e5);
+      return '<li><button type="button" data-f="' + x[0] + '"><div class="r1"><b>' + parse(x[0]).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }) +
+        '</b><small>' + (dif === 0 ? 'hoy' : dif === 1 ? 'mañana' : 'en ' + dif + ' días') + '</small></div><div class="r2"><em class="' + x[1].mod + '">' + esc(MODS[x[1].mod]) + '</em><span>' + esc(x[1].text) + '</span></div></button></li>';
+    }).join('') || '<li class="vacio">✨ No hay exámenes a la vista.</li>';
+  }
+  function renderDia() {
+    var ex = EX[diaSel] || [];
+    $('cal-fecha').innerHTML = hero(parse(diaSel), diaSel === iso(new Date()));
+    $('ex-lista').innerHTML = ex.length ? ex.map(function (e) {
+      return '<li class="tarj ' + e.mod + '" data-id="' + e.id + '"><select class="ex-mod" aria-label="Módulo">' + opts(e.mod) + '</select><input type="text" class="ex-txt" value="' + esc(e.text) +
+        '" placeholder="Tema del examen" maxlength="80"><button type="button" class="borrar" aria-label="Eliminar examen">×</button></li>';
+    }).join('') : '<li class="vacio">🎈 Sin exámenes este día. ¡Añade uno abajo!</li>';
+  }
+  function irA(k) { diaSel = k; var d = parse(k); vista = new Date(d.getFullYear(), d.getMonth(), 1); renderCal(); renderDia(); }
+  function exDe(li) { return (EX[diaSel] || []).filter(function (e) { return e.id === li.dataset.id; })[0]; }
+  $('ex-mod').innerHTML = opts(keys[0]);
+  $('cal').addEventListener('click', function (e) { var b = e.target.closest('button[data-f]'); if (b) irA(b.dataset.f); });
+  $('ex-prox').addEventListener('click', function (e) { var b = e.target.closest('button[data-f]'); if (b) irA(b.dataset.f); });
+  $('mes-ant').addEventListener('click', function () { vista = new Date(vista.getFullYear(), vista.getMonth() - 1, 1); renderCal(); });
+  $('mes-sig').addEventListener('click', function () { vista = new Date(vista.getFullYear(), vista.getMonth() + 1, 1); renderCal(); });
+  $('mes-hoy').addEventListener('click', function () { irA(iso(new Date())); });
+  function anadeEx() {
+    var t = $('ex-txt').value.trim();
+    (EX[diaSel] = EX[diaSel] || []).push({ id: uid(), mod: $('ex-mod').value, text: t });
+    $('ex-txt').value = ''; guardaEx(); renderCal(); renderDia();
+  }
+  $('ex-add').addEventListener('click', anadeEx);
+  $('ex-txt').addEventListener('keydown', function (e) { if (e.key === 'Enter') anadeEx(); });
+  $('ex-lista').addEventListener('input', function (e) {
+    var li = e.target.closest('li[data-id]'), x = li && exDe(li);
+    if (x && e.target.classList.contains('ex-txt')) { x.text = e.target.value; guardaEx(); renderCal(); }
+  });
+  $('ex-lista').addEventListener('change', function (e) {
+    var li = e.target.closest('li[data-id]'), x = li && exDe(li);
+    if (x && e.target.classList.contains('ex-mod')) { x.mod = e.target.value; li.className = 'tarj ' + x.mod; guardaEx(); renderCal(); }
+  });
+  $('ex-lista').addEventListener('click', function (e) {
+    var li = e.target.closest('li[data-id]');
+    if (li && e.target.closest('.borrar')) { EX[diaSel] = EX[diaSel].filter(function (x) { return x.id !== li.dataset.id; }); guardaEx(); renderCal(); renderDia(); }
+  });
+
+  /* ---------- 4. Agenda ---------- */
+  var AG = load('agenda'), fecha = iso(new Date()), tmr;
+  function guardaAg() {
+    Object.keys(AG).forEach(function (k) { if (!AG[k].tasks.length && !AG[k].notes) delete AG[k]; });
+    save('agenda', AG);
+  }
+  function diaAg() { return AG[fecha] || (AG[fecha] = { notes: '', tasks: [] }); }
+  function renderAg() {
+    var d = AG[fecha] || { notes: '', tasks: [] }, pend = d.tasks.filter(function (t) { return !t.done; }).length;
+    $('ag-fecha').innerHTML = hero(parse(fecha), fecha === iso(new Date())); $('ag-input').value = fecha;
+    $('ag-hoy').hidden = fecha === iso(new Date());
+    $('tareas').innerHTML = d.tasks.length ? d.tasks.map(function (t) {
+      return '<li data-id="' + t.id + '" class="tarj ' + (t.mod || '') + (t.done ? ' hecha' : '') + '"><input type="checkbox"' + (t.done ? ' checked' : '') + ' aria-label="Marcar como hecha"><span class="tx">' + esc(t.text) + '</span>' +
+        (t.mod ? '<em class="' + t.mod + '">' + esc(MODS[t.mod]) + '</em>' : '') + '<button type="button" class="borrar" aria-label="Eliminar tarea">×</button></li>';
+    }).join('') : '<li class="vacio">🎉 Sin tareas este día. ¡A disfrutar!</li>';
+    $('ag-cuenta').textContent = d.tasks.length ? pend + ' pendiente' + (pend === 1 ? '' : 's') + ' · ' + (d.tasks.length - pend) + ' hecha' + (d.tasks.length - pend === 1 ? '' : 's') : '';
+    $('ag-progb').hidden = !d.tasks.length; $('ag-prog').style.width = d.tasks.length ? (d.tasks.length - pend) / d.tasks.length * 100 + '%' : '0';
+    $('notas').value = d.notes || '';
+  }
+  function irAg(k) { if (k) { fecha = k; renderAg(); } }
+  function mueve(n) { var d = parse(fecha); d.setDate(d.getDate() + n); irAg(iso(d)); }
+  $('ag-mod').innerHTML = opts('', true);
+  $('ag-prev').addEventListener('click', function () { mueve(-1); });
+  $('ag-next').addEventListener('click', function () { mueve(1); });
+  $('ag-hoy').addEventListener('click', function () { irAg(iso(new Date())); });
+  $('ag-input').addEventListener('change', function (e) { irAg(e.target.value); });
+  function anadeTarea() {
+    var t = $('ag-txt').value.trim(); if (!t) return;
+    diaAg().tasks.push({ id: uid(), text: t, mod: $('ag-mod').value, done: false });
+    $('ag-txt').value = ''; guardaAg(); renderAg();
+  }
+  $('ag-add').addEventListener('click', anadeTarea);
+  $('ag-txt').addEventListener('keydown', function (e) { if (e.key === 'Enter') anadeTarea(); });
+  $('tareas').addEventListener('click', function (e) {
+    var li = e.target.closest('li[data-id]'); if (!li) return;
+    var d = diaAg();
+    if (e.target.closest('.borrar')) d.tasks = d.tasks.filter(function (t) { return t.id !== li.dataset.id; });
+    else if (e.target.type === 'checkbox') d.tasks.forEach(function (t) { if (t.id === li.dataset.id) t.done = e.target.checked; });
+    else return;
+    guardaAg(); renderAg();
+  });
+  $('notas').addEventListener('input', function (e) {
+    diaAg().notes = e.target.value; $('guardado').textContent = 'Guardando…';
+    clearTimeout(tmr);
+    tmr = setTimeout(function () { guardaAg(); $('guardado').textContent = 'Guardado el ' + largo(parse(fecha)) + '.'; }, 500);
+  });
+
+  renderCal(); renderDia(); renderAg();
+})();
+</script>
+<!-- ===== SCRIPT 3: VISTAS (Escolar / Rutina) Y HORARIO RUTINA ===== -->
+<script>
+/*
+ * Secciones:
+ *   1. Cambio de vista      (botones de arriba; emite el evento "modo")
+ *   2. Datos de la rutina   (categorías, ejemplo, clave "rutina": [{ id, d, s, n, t, c }])
+ *   3. Parrilla             (pintado de días, horas, huecos y tareas)
+ *   4. Interacción          (clic, arrastrar y soltar)
+ *   5. Diálogo de edición
+ *
+ * Tarea: d = día (1 lunes … 7 domingo), s = hora de inicio, n = duración en horas,
+ *        t = título, c = categoría.
+ */
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function hh(h) { return (h < 10 ? '0' : '') + h + ':00'; }
+
+  /* ---------- 1. Cambio de vista ---------- */
+  var TITULOS = {
+    escolar: ['Horario Escolar', 'Clases de 08:30 a 14:30 · sesiones de 55 minutos · dos recreos'],
+    rutina: ['Horario Rutina', 'De lunes a domingo, hora a hora · tareas y planes que puedes editar y mover']
+  };
+  function vista(m) {
+    document.body.dataset.modo = m;
+    ['escolar', 'rutina'].forEach(function (x) {
+      $('vista-' + x).hidden = x !== m;
+      document.querySelector('.selector-modo [data-modo="' + x + '"]').setAttribute('aria-selected', x === m);
+    });
+    $('titulo').textContent = TITULOS[m][0];
+    $('subtitulo').textContent = TITULOS[m][1];
+    try { localStorage.setItem('modo', m); } catch (e) {}
+    document.dispatchEvent(new Event('modo'));
+  }
+  document.querySelectorAll('.selector-modo button').forEach(function (b) {
+    b.addEventListener('click', function () { vista(b.dataset.modo); });
+  });
+
+  /* ---------- 2. Datos de la rutina ---------- */
+  var H0 = 7, H1 = 23;   // horas visibles: de 07:00 a 23:00
+  var DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+  // Categoría → nombre y clase de color (se reutiliza la paleta de módulos)
+  var CAT = {
+    estudio: { n: 'Estudio', c: 'so' }, trabajo: { n: 'Trabajo', c: 'sos' }, limpieza: { n: 'Limpieza', c: 'mm' },
+    compras: { n: 'Compras', c: 'sr' }, amigos: { n: 'Amigos y ocio', c: 'aw' }, deporte: { n: 'Deporte', c: 'pj' },
+    comida: { n: 'Comidas', c: 'pr' }, descanso: { n: 'Descanso', c: 'ipe' }, otros: { n: 'Otros', c: 'di' }
+  };
+  // Tareas de ejemplo: [día, inicio, horas, título, categoría]
+  var EJEMPLO = [
+    [1, 7, 1, 'Desayunar', 'comida'], [1, 15, 1, 'Comer', 'comida'], [1, 16, 2, 'Estudio: Programación', 'estudio'], [1, 18, 1, 'Ejercicio', 'deporte'], [1, 20, 1, 'Cenar', 'comida'],
+    [2, 7, 1, 'Desayunar', 'comida'], [2, 15, 1, 'Comer', 'comida'], [2, 16, 2, 'Estudio: Redes', 'estudio'], [2, 18, 1, 'Limpiar la cocina', 'limpieza'], [2, 19, 2, 'Trabajo en el proyecto', 'trabajo'],
+    [3, 7, 1, 'Desayunar', 'comida'], [3, 15, 1, 'Comer', 'comida'], [3, 16, 2, 'Estudio: Aplicaciones Web', 'estudio'], [3, 18, 1, 'Ir a la compra', 'compras'], [3, 20, 1, 'Cenar', 'comida'],
+    [4, 7, 1, 'Desayunar', 'comida'], [4, 15, 1, 'Comer', 'comida'], [4, 16, 2, 'Estudio libre', 'estudio'], [4, 18, 1, 'Ejercicio', 'deporte'], [4, 19, 1, 'Poner la lavadora', 'limpieza'],
+    [5, 7, 1, 'Desayunar', 'comida'], [5, 15, 1, 'Comer', 'comida'], [5, 16, 1, 'Repasar la semana', 'estudio'], [5, 18, 3, 'Plan con amigos', 'amigos'],
+    [6, 8, 4, 'Trabajo (turno)', 'trabajo'], [6, 13, 1, 'Comer', 'comida'], [6, 15, 1, 'Compra semanal', 'compras'], [6, 17, 3, 'Cine con amigos', 'amigos'],
+    [7, 10, 2, 'Limpieza general', 'limpieza'], [7, 13, 2, 'Comida familiar', 'comida'], [7, 16, 2, 'Estudio: repaso', 'estudio'], [7, 19, 1, 'Preparar la semana', 'otros'], [7, 21, 1, 'Descanso', 'descanso']
+  ];
+  function ejemplo() {
+    return EJEMPLO.map(function (e) { return { id: uid(), d: e[0], s: e[1], n: e[2], t: e[3], c: e[4] }; });
+  }
+  function cargar() {
+    try { var raw = localStorage.getItem('rutina'); if (raw !== null) return JSON.parse(raw); } catch (e) {}
+    return ejemplo();
+  }
+  function guardar() { try { localStorage.setItem('rutina', JSON.stringify(TAREAS)); } catch (e) {} }
+  var TAREAS = cargar();
+
+  // ¿Cabe una tarea (d, s, n) sin solaparse con otras? (se ignora a sí misma)
+  function libre(t, d, s, n) {
+    if (s < H0 || s + n > H1) return false;
+    return !TAREAS.some(function (o) { return o.id !== t.id && o.d === d && s < o.s + o.n && o.s < s + n; });
+  }
+  var avisoT;
+  function aviso(txt) {
+    $('rut-aviso').textContent = txt;
+    clearTimeout(avisoT); avisoT = setTimeout(function () { $('rut-aviso').textContent = ''; }, 3500);
+  }
+
+  /* ---------- 3. Parrilla ---------- */
+  function pinta() {
+    var g = $('rut-grid'), now = new Date(), hoy = (now.getDay() + 6) % 7 + 1, hAct = now.getHours();
+    var h = '<span></span>';
+    DIAS.forEach(function (d, i) {
+      h += '<span class="rut-dia' + (i + 1 === hoy ? ' es-hoy' : '') + '" style="grid-column:' + (i + 2) + ';grid-row:1">' + d + '</span>';
+    });
+    for (var hr = H0; hr < H1; hr++) {
+      var fila = hr - H0 + 2;
+      h += '<span class="rut-hora' + (hr === hAct ? ' ahora-h' : '') + '" style="grid-column:1;grid-row:' + fila + '">' + hh(hr) + '</span>';
+      for (var d = 1; d <= 7; d++) {
+        h += '<button type="button" class="slot' + (d === hoy ? ' col-hoy' : '') + '" tabindex="-1" data-dia="' + d + '" data-hora="' + hr +
+          '" aria-label="Añadir tarea: ' + DIAS[d - 1] + ' ' + hh(hr) + '" style="grid-column:' + (d + 1) + ';grid-row:' + fila + '">+</button>';
+      }
+    }
+    TAREAS.forEach(function (t) {
+      h += '<button type="button" class="tarea ' + CAT[t.c].c + '" draggable="true" data-id="' + t.id + '" style="grid-column:' + (t.d + 1) +
+        ';grid-row:' + (t.s - H0 + 2) + ' / span ' + t.n + '"><b>' + esc(t.t) + '</b><small>' + hh(t.s) + '–' + hh(t.s + t.n) + (t.n > 1 ? ' · ' + CAT[t.c].n : '') + '</small></button>';
+    });
+    g.innerHTML = h;
+  }
+  $('rut-leyenda').innerHTML = Object.keys(CAT).map(function (k) { return '<span><i class="' + CAT[k].c + '"></i>' + CAT[k].n + '</span>'; }).join('');
+
+  /* ---------- 4. Interacción ---------- */
+  var grid = $('rut-grid'), arrastrada = null;
+  grid.addEventListener('click', function (e) {
+    var t = e.target.closest('.tarea'), sl = e.target.closest('.slot');
+    if (t) abrir(t.dataset.id); else if (sl) abrir(null, +sl.dataset.dia, +sl.dataset.hora);
+  });
+  grid.addEventListener('dragstart', function (e) {
+    var t = e.target.closest('.tarea'); if (!t) return;
+    arrastrada = t.dataset.id; e.dataTransfer.setData('text/plain', arrastrada); e.dataTransfer.effectAllowed = 'move';
+    setTimeout(function () { grid.classList.add('arrastrando'); t.classList.add('moviendo'); }, 0);
+  });
+  // Limpia el estado de arrastre. Se llama también al soltar: al repintar, el elemento arrastrado
+  // desaparece y el navegador no emite "dragend", lo que dejaría las tareas sin poder pulsarse.
+  function finArrastre() {
+    arrastrada = null; grid.classList.remove('arrastrando');
+    grid.querySelectorAll('.moviendo,.sobre').forEach(function (e) { e.classList.remove('moviendo', 'sobre'); });
+  }
+  grid.addEventListener('dragend', finArrastre);
+  grid.addEventListener('dragover', function (e) {
+    var sl = e.target.closest('.slot'); if (!sl || !arrastrada) return;
+    e.preventDefault();
+    grid.querySelectorAll('.sobre').forEach(function (x) { if (x !== sl) x.classList.remove('sobre'); });
+    sl.classList.add('sobre');
+  });
+  grid.addEventListener('drop', function (e) {
+    var sl = e.target.closest('.slot'); if (!sl || !arrastrada) return;
+    e.preventDefault();
+    var t = TAREAS.filter(function (x) { return x.id === arrastrada; })[0], d = +sl.dataset.dia, s = +sl.dataset.hora;
+    if (!t) return;
+    if (!libre(t, d, s, t.n)) { aviso('Ese hueco no está libre para «' + t.t + '».'); return; }
+    t.d = d; t.s = s; finArrastre(); guardar(); pinta();
+  });
+  $('rut-nueva').addEventListener('click', function () { abrir(null); });
+  var confirmando;
+  $('rut-ejemplo').addEventListener('click', function (e) {
+    var b = e.currentTarget;
+    if (!confirmando) {   // primera pulsación: pide confirmación (sin usar confirm())
+      confirmando = setTimeout(function () { confirmando = null; b.textContent = 'Restaurar ejemplo'; }, 3500);
+      b.textContent = '¿Seguro? Pulsa otra vez'; return;
+    }
+    clearTimeout(confirmando); confirmando = null; b.textContent = 'Restaurar ejemplo';
+    TAREAS = ejemplo(); guardar(); pinta(); aviso('Se ha restaurado la rutina de ejemplo.');
+  });
+
+  /* ---------- 5. Diálogo de edición ---------- */
+  var dlg = $('rut-dialogo'), editando = null;
+  function opciones(id, items) { $(id).innerHTML = items.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join(''); }
+  opciones('f-cat', Object.keys(CAT).map(function (k) { return [k, CAT[k].n]; }));
+  opciones('f-dia', DIAS.map(function (d, i) { return [i + 1, d]; }));
+  opciones('f-ini', Array.apply(null, Array(H1 - H0)).map(function (_, i) { return [H0 + i, hh(H0 + i)]; }));
+  opciones('f-dur', Array.apply(null, Array(8)).map(function (_, i) { return [i + 1, (i + 1) + ' h']; }));
+
+  // Abre el diálogo para editar la tarea "id" o para crear una nueva (con día y hora opcionales)
+  function abrir(id, d, h) {
+    editando = id ? TAREAS.filter(function (x) { return x.id === id; })[0] : null;
+    var t = editando;
+    $('dlg-titulo').textContent = t ? 'Editar tarea' : 'Nueva tarea';
+    $('f-titulo').value = t ? t.t : '';
+    $('f-cat').value = t ? t.c : 'estudio';
+    $('f-dia').value = t ? t.d : (d || 1);
+    $('f-ini').value = t ? t.s : (h || 16);
+    $('f-dur').value = t ? t.n : 1;
+    $('f-borrar').hidden = !t; $('f-error').textContent = '';
+    try { dlg.showModal(); } catch (e) { dlg.setAttribute('open', ''); }   // respaldo si showModal no está disponible
+    $('f-titulo').focus();
+  }
+  // Guarda la tarea del diálogo. No se usa <form>: puede estar bloqueado en páginas incrustadas.
+  function guardarTarea() {
+    var v = { d: +$('f-dia').value, s: +$('f-ini').value, n: +$('f-dur').value, t: $('f-titulo').value.trim(), c: $('f-cat').value };
+    if (!v.t) { $('f-error').textContent = 'Escribe un nombre para la tarea.'; return; }
+    if (!libre(editando || { id: null }, v.d, v.s, v.n)) {
+      $('f-error').textContent = v.s + v.n > H1 ? 'La tarea termina después de las ' + hh(H1) + '.' : 'Ese hueco se solapa con otra tarea.';
+      return;
+    }
+    if (editando) Object.assign(editando, v); else TAREAS.push(Object.assign({ id: uid() }, v));
+    guardar(); pinta(); dlg.close();
+  }
+  $('f-guardar').addEventListener('click', guardarTarea);
+  $('f-titulo').addEventListener('keydown', function (e) { if (e.key === 'Enter') guardarTarea(); });
+  $('f-borrar').addEventListener('click', function () {
+    TAREAS = TAREAS.filter(function (x) { return x !== editando; }); guardar(); pinta(); dlg.close();
+  });
+  $('f-cancelar').addEventListener('click', function () { dlg.close(); });
+
+  /* ---------- Arranque ---------- */
+  pinta();
+  setInterval(function () { if (!grid.classList.contains('arrastrando') && !dlg.open) pinta(); }, 60000);   // refresca "hoy" y "hora actual"
+  var guardado; try { guardado = localStorage.getItem('modo'); } catch (e) {}
+  vista(guardado === 'rutina' ? 'rutina' : 'escolar');
+})();
+</script>
+</body>
+</html>
